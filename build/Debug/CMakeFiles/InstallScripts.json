@@ -1,0 +1,8 @@
+{
+	"InstallScripts" : 
+	[
+		"C:/Users/Jeff/Documents/Winter-2025/MIE438/Project/blink_pwm3/build/Debug/cmake_install.cmake",
+		"C:/Users/Jeff/Documents/Winter-2025/MIE438/Project/blink_pwm3/build/Debug/cmake/stm32cubemx/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

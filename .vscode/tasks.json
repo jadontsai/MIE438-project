@@ -1,0 +1,23 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Flash STM32 (CubeProgrammer)",
+      "type": "shell",
+      "command": "\"C:/ST/STM32CubeIDE_2.1.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.cubeprogrammer.win32_2.2.400.202601091506/tools/bin/STM32_Programmer_CLI.exe\"",
+      "args": [
+        "-c",
+        "port=SWD",
+        "-w",
+        "C:/Users/Jeff/Documents/Winter-2025/MIE438/Project/blink_pwm3/build/Debug/blink_pwm3.elf", // Path to your compiled .elf or .bin file
+        "-v",
+        "-Rst" // Reset after programming
+      ],
+      "group": "build",
+      "presentation": {
+        "reveal": "always"
+      },
+      "problemMatcher": []
+    }
+  ]
+}
