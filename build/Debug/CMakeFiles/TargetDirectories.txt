@@ -1,0 +1,8 @@
+C:/Users/Jeff/Documents/Winter-2025/MIE438/Project/BLE_p2pServer/build/Debug/CMakeFiles/BLE_p2pServer.dir
+C:/Users/Jeff/Documents/Winter-2025/MIE438/Project/BLE_p2pServer/build/Debug/CMakeFiles/edit_cache.dir
+C:/Users/Jeff/Documents/Winter-2025/MIE438/Project/BLE_p2pServer/build/Debug/CMakeFiles/rebuild_cache.dir
+C:/Users/Jeff/Documents/Winter-2025/MIE438/Project/BLE_p2pServer/build/Debug/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir
+C:/Users/Jeff/Documents/Winter-2025/MIE438/Project/BLE_p2pServer/build/Debug/cmake/stm32cubemx/CMakeFiles/Utilities.dir
+C:/Users/Jeff/Documents/Winter-2025/MIE438/Project/BLE_p2pServer/build/Debug/cmake/stm32cubemx/CMakeFiles/STM32_WPAN.dir
+C:/Users/Jeff/Documents/Winter-2025/MIE438/Project/BLE_p2pServer/build/Debug/cmake/stm32cubemx/CMakeFiles/edit_cache.dir
+C:/Users/Jeff/Documents/Winter-2025/MIE438/Project/BLE_p2pServer/build/Debug/cmake/stm32cubemx/CMakeFiles/rebuild_cache.dir
