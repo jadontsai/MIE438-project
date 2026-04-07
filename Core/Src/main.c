@@ -96,9 +96,14 @@ static void MX_RNG_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_RF_Init(void);
 /* USER CODE BEGIN PFP */
+
+/*
+Initial definitions for some of the input and motor output control functions used in
+conjunction with the PID control loop to move the robot.
+*/
 int deadband_input(int input);
 int deadband_output(int output);
-void motor_control_pid(int distance_error, int angular_error, PID_Controller_t *pid_both, PID_Controller_t *pid_differential, float dt);
+void motor_control_pid(int width_error, int angular_error, float dt, int *both_integral, int *both_prev_error, int *differential_integral, int *differential_prev_error);
 void motor_control(int i1, int i2);
 /* USER CODE END PFP */
 
@@ -150,12 +155,30 @@ int main(void)
   MX_TIM1_Init();
   MX_RF_Init();
   /* USER CODE BEGIN 2 */
-  PID_Controller_t pid_straight;
-  PID_Controller_t pid_turn;
-  PID_Init(&pid_straight, 100, 0.0001, 0.0001, 40000, 40000);
-  PID_Init(&pid_turn, 10, 0.0001, 0.0001, 10000, 10000);
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);  // put your stuff here
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);  // put your stuff here
+
+  /*
+  Initialize the integral and previous error variables - these variables must be initialized
+  outside of the PID update loop as their values must be stored externally to function as 
+  intended.
+  */
+  int both_integral = 0;
+  int both_prev_error;
+  int differential_integral = 0;
+  int differential_prev_error;
+
+  /*
+  Initialize the first_flag value - this prevents large derivative values that may otherwise
+  be present on startup since the difference between the original previous error value and
+  first measured error value could be arbitrarily large.
+  */
+  int first_flag = 0;
+
+  /*
+  Initialize the PWM output for both motors and set them both to 0 to stop the motors from
+  turning before receiving input. 
+  */
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1); 
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);  
   TIM1->CCR1 = 0;
   TIM1->CCR2 = 0;
   /* USER CODE END 2 */
@@ -170,9 +193,26 @@ int main(void)
     /* USER CODE END WHILE */
     MX_APPE_Process();
 
+    /*
+    If a new value is received over BLE, update the PID accordingly.
+    */
     if(new_value_flag) {
       new_value_flag = 0;
-      motor_control_pid(MAX_WIDTH - width, angular_error, &pid_straight, &pid_turn, 0.2);
+
+      /*
+      A condition that checks whether this is the first message received over BLE, to 
+      prevent the derivative value from spiking. 
+      */
+      if(first_flag == 0) {
+        first_flag = 1;
+        both_prev_error = MAX_WIDTH - width;
+        differential_prev_error = angular_error;
+      }
+
+      /*
+      Update the PID control loop using the values received from the BLE message.
+      */
+      motor_control_pid(MAX_WIDTH - width, angular_error, 0.2, &both_integral, &both_prev_error, &differential_integral, &differential_prev_error);
     }
 
     /* USER CODE BEGIN 3 */
@@ -597,6 +637,10 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+/*
+Add a deadband to the angular error input values received over BLE. Used in conjunction with integral
+control to limit the amount of oscillation once the robot nears its desired position.
+*/
 int deadband_input(int input) {
   if(abs(input) < 100) {
     input = 0;
@@ -604,6 +648,10 @@ int deadband_input(int input) {
   return input;
 }
 
+/*
+Add a deadband to the width input values received over BLE. Similar to the angular error
+input deadband, but limited to positive values. 
+*/
 int deadband_width_input(int input) {
   if(input < 100) {
     input = 0;
@@ -611,6 +659,11 @@ int deadband_width_input(int input) {
   return input;
 }
 
+/*
+A function used to accomodate moderate-low PWM output values - though we could have made
+do without this function, we preferred for the robot to move at a constant, somewhat slow pace
+instead of decelerating down to zero speed.
+*/
 int in_between_output(int output) {
   if((abs(output) < 10000) && (abs(output) > 5000)) {
     output = (output) / abs(output) * 12000;
@@ -618,6 +671,12 @@ int in_between_output(int output) {
   return output;
 }
 
+/*
+A function used to stop our robot entirely once the PWM motor output dropped below a certain
+threshold. We found that below this threshold, the motors had too little power to move the 
+robot, resulting in a humming noise with no movement. Adding the deadband stopped the humming
+(and thus unnecessary power draw).
+*/
 int deadband_output(int output) {
   if(abs(output) < 5000) {
     output = 0;
@@ -625,33 +684,67 @@ int deadband_output(int output) {
   return output;
 }
 
-void motor_control_pid(int width_error, int angular_error, PID_Controller_t *pid_both, PID_Controller_t *pid_differential, float dt) {
+/*
+A function using the PID update function laid out in pid.h and pid.c to update the movement
+outputs passed to the left and right motors. 
+
+We used two different PID loops, one for linear motion which used the width of the bounding 
+box as an error input, and one for rotational motion which used the angular difference as
+an error input, and generated a differential output. We then added (or subtracted) the 
+differential output to the linear motion output to find the actual output passed to the 
+left and right motors.
+*/
+void motor_control_pid(int width_error, int angular_error, float dt, int *both_integral, int *both_prev_error, int *differential_integral, int *differential_prev_error) {
+  
+  /* 
+  Initialize output variables
+  */
   int left_output;
   int right_output;
   int both_output;
   int differential_output;
+
+  /*
+  If no human is detected by the computer vision software, spin in a circle indefinitely.
+  */
   if(angular_error == 9999) {
     motor_control(-32000, 32000);
   }
   else {
+    /*
+    Pass the associated error values to the correct PID loops, and update the linear and
+    differential output values accordingly.
+    */
     APP_DBG_MSG("OUTPUTS: %d, %d", deadband_width_input(width_error), deadband_input(angular_error));
-    both_output = PID_Update(pid_both, deadband_width_input(width_error), dt);
-    differential_output = PID_Update(pid_differential, deadband_input(angular_error), dt);
+    both_output = pid_update(deadband_width_input(width_error), dt, 100, 0.0001, 0.0001, both_integral, both_prev_error, 40000, 40000);
+    differential_output = pid_update(deadband_input(angular_error), dt, 10, 0.0001, 0.0001, differential_integral, differential_prev_error, 10000, 10000);
     APP_DBG_MSG("OUTPUTS: %d, %d", both_output, differential_output);
+    
+    /*
+    Use the linear and differential update values to get the final left and right motor
+    output values.
+    */
     left_output = in_between_output(deadband_output(-1*both_output + differential_output));
     right_output = in_between_output(deadband_output(-1*both_output - differential_output));
+    
+    /*
+    Pass the updated motor output values to the motor control function. 
+    */
     motor_control(left_output, right_output);
   }
-  
-  // Given error, move forward based on the camera error (first value)
-  // Turn left / right based on the angular error (second value)
-  // Add a dead zone (smaller than a certain threshold, don't move)
-  // If the angular error is 9999, no person case
-
 }
 
+/*
+A function used to control the left and right motors given the inputs i1 (for the left motor)
+and i2 (for the right motor). Note that directionality is encoded directly in i1 and i2; 
+both i1 and i2 can take on positive and negative values, and the motor control function
+will change the motor rotation direction accordingly.
+*/
 void motor_control(int i1, int i2) {
 
+    /*
+    Directionality control for the left motor.
+    */
     if(i1 >= 0) {
       HAL_GPIO_WritePin(MOTOR_GPIO_PORT, GPIO_AIN1, GPIO_PIN_SET);
       HAL_GPIO_WritePin(MOTOR_GPIO_PORT, GPIO_AIN2, GPIO_PIN_RESET);
@@ -660,6 +753,10 @@ void motor_control(int i1, int i2) {
       HAL_GPIO_WritePin(MOTOR_GPIO_PORT, GPIO_AIN1, GPIO_PIN_RESET);
       HAL_GPIO_WritePin(MOTOR_GPIO_PORT, GPIO_AIN2, GPIO_PIN_SET);
     }
+
+    /*
+    Directionality control for the right motor.
+    */
     if(i2 >= 0) {
       HAL_GPIO_WritePin(MOTOR_GPIO_PORT, GPIO_BIN1, GPIO_PIN_SET);
       HAL_GPIO_WritePin(MOTOR_GPIO_PORT, GPIO_BIN2, GPIO_PIN_RESET);
@@ -669,7 +766,9 @@ void motor_control(int i1, int i2) {
       HAL_GPIO_WritePin(MOTOR_GPIO_PORT, GPIO_BIN2, GPIO_PIN_SET);
     }
 
-    
+    /*
+    Update the PWM duty cycle passed to the motors based on the magnitudes of i1 and i2.
+    */
     TIM1->CCR1 = abs(i1);
     TIM1->CCR2 = abs(i2);
 }

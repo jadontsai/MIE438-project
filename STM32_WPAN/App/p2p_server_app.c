@@ -3,7 +3,9 @@
   ******************************************************************************
   * @file    p2p_server_app.c
   * @author  MCD Application Team
-  * @brief   Peer to peer Server Application
+  * @brief   Peer to peer Server Application, modified to support Group 14's implementation
+  * of an app that receives width and angular difference data over BLE, and passes it
+  * to a PID control loop.
   ******************************************************************************
   * @attention
   *
@@ -120,20 +122,32 @@ void P2PS_STM_App_Notification(P2PS_STM_App_Notification_evt_t *pNotification)
 
     case P2PS_STM_WRITE_EVT:
 /* USER CODE BEGIN P2PS_STM_WRITE_EVT */
+      /*
+      Create a buffer to receive the data from the BLE message, and make sure the amount
+      of data transferred fits within the buffer. 
+      */
       char rx_buf[RX_PRINT_BUF_SIZE];
       uint16_t len = pNotification->DataTransfered.Length;
-
       if (len >= RX_PRINT_BUF_SIZE)
       {
         len = RX_PRINT_BUF_SIZE - 1;
       }
 
+      /*
+      Transfer data from the BLE message to the buffer, and print the received data for
+      debugging.
+      */
       memcpy(rx_buf, pNotification->DataTransfered.pPayload, len);
       rx_buf[len] = '\0';
       APP_DBG_MSG("%s\n\r", rx_buf);
+
+      /*
+      Extract width and angular difference data from the buffer, and update the relevant 
+      variables before returning back to the main loop. 
+      */      
       int i1, i2;
       if(2 == sscanf(rx_buf, "%d,%d", &i1, &i2)) {
-        APP_DBG_MSG("-- RX CMD: %d, %d, \n\r", i1, i2);
+        APP_DBG_MSG("RX CMD: %d, %d, \n\r", i1, i2);
       }
       new_value_flag = 1;
       width = i1;
